@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  loinc-lab-mapper:
+    build: .
+    container_name: loinc-lab-mapper
+    ports:
+      - "8000:8000"
+    environment:
+      - AUDIT_SECRET_KEY=loinc-lab-mapper-prod-audit-key-2026
+      - MODEL_PROVIDER=mock
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

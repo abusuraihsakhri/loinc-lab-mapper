@@ -4,6 +4,8 @@ Command Line Interface for Loinc Lab Mapper.
 import argparse
 import csv
 import json
+import os
+import pathlib
 import sys
 from agents.models import SystemTaskPayload
 from agents.supervisor import SystemSupervisor
@@ -80,21 +82,47 @@ def main(argv=None):
         return 0
 
     if args.command == "batch":
-        with open(args.input, mode="r", encoding="utf-8-sig") as f:
-            reader = csv.DictReader(f)
-            fieldnames = list(reader.fieldnames or [])
-            rows = list(reader)
+        input_path = pathlib.Path(args.input)
+        if not input_path.exists():
+            print(f"Error: Input file not found: {args.input}", file=sys.stderr)
+            return 1
+        if not input_path.is_file():
+            print(f"Error: Input path is not a file: {args.input}", file=sys.stderr)
+            return 1
+
+        try:
+            with open(input_path, mode="r", encoding="utf-8-sig") as f:
+                reader = csv.DictReader(f)
+                fieldnames = list(reader.fieldnames or [])
+                rows = list(reader)
+        except csv.Error as e:
+            print(f"Error: CSV parsing failed: {e}", file=sys.stderr)
+            return 1
+
+        if not fieldnames:
+            print("Error: CSV file has no header row", file=sys.stderr)
+            return 1
+        if not rows:
+            print("Error: CSV file contains no data rows", file=sys.stderr)
+            return 1
 
         out_fields = fieldnames + ["overall_urgency", "integrity_status", "total_alerts", "audit_hash"]
         out_rows = []
         for r in rows:
+            try:
+                primary = float(r.get("primary_metric", 15.0))
+                secondary = float(r.get("secondary_metric", 5.0))
+            except (ValueError, TypeError) as e:
+                print(f"Warning: Invalid metric values in row {r}: {e}", file=sys.stderr)
+                continue
+
             payload = SystemTaskPayload(
-                task_id=r.get("task_id", "TASK-01"),
-                target_identifier=r.get("target_identifier", "TARGET-01"),
-                primary_metric=float(r.get("primary_metric", 15.0)),
-                secondary_metric=float(r.get("secondary_metric", 5.0)),
-                status_descriptor=r.get("status_descriptor", "NOMINAL"),
-                is_critical_flag=bool(r.get("is_critical_flag", False)),
+                task_id=str(r.get("task_id", "TASK-01")),
+                target_identifier=str(r.get("target_identifier", "TARGET-01")),
+                primary_metric=primary,
+                secondary_metric=secondary,
+                status_descriptor=str(r.get("status_descriptor", "NOMINAL")),
+                is_critical_flag=str(r.get("is_critical_flag", "")).lower() in ("true", "1", "yes"),
             )
             dossier = supervisor.process_task(payload)
             row_dict = dict(r)
@@ -103,6 +131,10 @@ def main(argv=None):
             row_dict["total_alerts"] = dossier.total_alerts
             row_dict["audit_hash"] = dossier.audit_hash
             out_rows.append(row_dict)
+
+        output_dir = pathlib.Path(args.output).parent
+        if output_dir:
+            output_dir.mkdir(parents=True, exist_ok=True)
 
         with open(args.output, mode="w", encoding="utf-8", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=out_fields)

@@ -4,67 +4,279 @@ LOINC Lab Mapper
 Fuzzy maps local lab test names to LOINC codes via token overlap and Levenshtein ratio (no external deps).
 Stdlib parser / mapper with batch CSV and single lookup.
 """
-import argparse, csv, sys, re, json, pathlib
+import argparse
+import csv
+import json
+import pathlib
+import sys
 
-def lookup(query, extra=None):
-    """Single lookup: token overlap + substring scoring (no deps). Returns top hits."""
-    q = str(query).lower().strip()
-    # tiny built-in dictionary per project slug for demo
-    bank = {
-        "loinc-lab-mapper": [("2160-0 Creatinine","creatinine"),("6690-2 WBC","wbc"),("718-7 Hemoglobin","hemoglobin"),("4548-4 HbA1c","hba1c")],
-        "hla-compatibility-matcher": [("A*02:01","A02"),("B*07:02","B07"),("DRB1*15:01","DRB115")],
-        "icd10-ccsr-mapper": [("I10 Hypertension","I10"),("E11 Type 2 diabetes","E11"),("J18 Pneumonia","J18")],
-        "antibiogram-mdr-classifier": [("MDR","multidrug"),("XDR","extensive"),("PDR","pandrug")],
-        "fhir-bundle-validator": [("Patient","patient"),("Observation","observation")],
-        "cyp-drug-interaction-checker": [("CYP3A4 substrate","cyp3a4"),("CYP2D6 inhibitor","cyp2d6")],
+
+# LOINC code database for common lab tests
+# Format: (LOINC code, display name, [keywords/aliases])
+LOINC_DATABASE = [
+    ("2160-0", "Creatinine", ["creatinine", "crea", "cr"]),
+    ("6690-2", "WBC", ["wbc", "white blood cell", "white blood count", "leukocyte"]),
+    ("718-7", "Hemoglobin", ["hemoglobin", "hgb", "hb"]),
+    ("4548-4", "HbA1c", ["hba1c", "a1c", "hemoglobin a1c", "glycated hemoglobin"]),
+    ("2951-2", "Sodium", ["sodium", "na"]),
+    ("2823-3", "Potassium", ["potassium", "k"]),
+    ("2075-0", "Chloride", ["chloride", "cl"]),
+    ("17861-6", "Calcium", ["calcium", "ca"]),
+    ("2345-7", "Glucose", ["glucose", "glu", "blood sugar"]),
+    ("2571-8", "Triglyceride", ["triglyceride", "tg", "trig"]),
+    ("2093-3", "Cholesterol", ["cholesterol", "chol", "tc"]),
+    ("2085-9", "HDL Cholesterol", ["hdl", "hdl cholesterol", "high density lipoprotein"]),
+    ("2089-1", "LDL Cholesterol", ["ldl", "ldl cholesterol", "low density lipoprotein"]),
+    ("30522-7", "CRP", ["crp", "c-reactive protein", "c reactive protein"]),
+    ("1988-5", "ESR", ["esr", "sed rate", "erythrocyte sedimentation rate"]),
+    ("1751-7", "Albumin", ["albumin", "alb"]),
+    ("1975-2", "Bilirubin", ["bilirubin", "bili", "total bilirubin"]),
+    ("1742-6", "ALT", ["alt", "alanine aminotransferase", "sgpt"]),
+    ("1920-8", "AST", ["ast", "aspartate aminotransferase", "sgot"]),
+    ("2885-2", "Total Protein", ["total protein", "tp", "protein total"]),
+    ("2161-8", "Urea Nitrogen", ["bun", "blood urea nitrogen", "urea nitrogen"]),
+    ("13945-1", "TSH", ["tsh", "thyroid stimulating hormone", "thyrotropin"]),
+    ("3016-3", "T4", ["t4", "thyroxine", "free t4", "ft4"]),
+    ("3024-7", "T3", ["t3", "triiodothyronine", "free t3", "ft3"]),
+    ("11558-4", "pH", ["ph", "blood ph"]),
+    ("11555-0", "pCO2", ["pco2", "carbon dioxide", "co2"]),
+    ("11556-8", "pO2", ["po2", "oxygen", "o2"]),
+    ("11557-6", "HCO3", ["hco3", "bicarbonate"]),
+]
+
+
+def _levenshtein_ratio(s1: str, s2: str) -> float:
+    """Compute similarity ratio between two strings using Levenshtein distance.
+
+    Returns a float between 0.0 and 1.0 where 1.0 means identical strings.
+    Pure Python implementation with no external dependencies.
+    """
+    s1 = s1.lower().strip()
+    s2 = s2.lower().strip()
+
+    if not s1 or not s2:
+        return 0.0
+
+    if s1 == s2:
+        return 1.0
+
+    len1, len2 = len(s1), len(s2)
+
+    # Use iterative approach with single row for memory efficiency
+    previous_row = list(range(len2 + 1))
+    for i, c1 in enumerate(s1):
+        current_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = previous_row[j + 1] + 1
+            deletions = current_row[j] + 1
+            substitutions = previous_row[j] + (c1 != c2)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+
+    distance = previous_row[-1]
+    max_len = max(len1, len2)
+    if max_len == 0:
+        return 1.0
+    return 1.0 - (distance / max_len)
+
+
+def lookup(query: str, max_results: int = 5) -> dict:
+    """Single lookup: token overlap + Levenshtein similarity scoring (no external deps).
+
+    Returns top matching LOINC codes ranked by relevance score.
+
+    Args:
+        query: The lab test name or code to search for.
+        max_results: Maximum number of results to return.
+
+    Returns:
+        Dictionary with query, top_hit, score, and all matches.
+    """
+    if query is None:
+        query = ""
+    query = str(query).lower().strip()
+
+    if not query:
+        return {"query": query, "top_hit": "no match", "score": 0, "all": []}
+
+    scored = []
+    for loinc_code, display_name, keywords in LOINC_DATABASE:
+        max_keyword_score = 0
+
+        # Check keyword matches
+        for keyword in keywords:
+            kw = keyword.lower().strip()
+
+            # Exact keyword match
+            if kw == query:
+                max_keyword_score = max(max_keyword_score, 10.0)
+                break
+
+            # Keyword substring match (keyword contained in query)
+            if kw in query:
+                max_keyword_score = max(max_keyword_score, 6.0)
+
+            # Query substring of keyword (query contained in keyword)
+            if query in kw:
+                max_keyword_score = max(max_keyword_score, 4.0)
+
+            # Token overlap scoring
+            query_tokens = set(query.split())
+            keyword_tokens = set(kw.split())
+            overlap = len(query_tokens & keyword_tokens)
+            if overlap > 0:
+                max_keyword_score = max(max_keyword_score, overlap * 2.0)
+
+            # Levenshtein similarity for fuzzy matching (threshold 0.7)
+            ratio = _levenshtein_ratio(query, kw)
+            if ratio >= 0.7:
+                max_keyword_score = max(max_keyword_score, ratio * 5.0)
+
+        # Also check display name for matches
+        name_lower = display_name.lower()
+        if query in name_lower:
+            max_keyword_score = max(max_keyword_score, 5.0)
+        elif name_lower in query:
+            max_keyword_score = max(max_keyword_score, 3.0)
+
+        # LOINC code exact match bonus
+        if query == loinc_code.lower():
+            max_keyword_score = max(max_keyword_score, 10.0)
+
+        if max_keyword_score > 0:
+            scored.append((max_keyword_score, f"{loinc_code} {display_name}"))
+
+    scored.sort(reverse=True, key=lambda x: x[0])
+
+    # Round scores for cleaner output
+    scored = [(round(score, 2), label) for score, label in scored]
+
+    top = scored[0] if scored else (0, "no match")
+    return {
+        "query": query,
+        "top_hit": top[1],
+        "score": top[0],
+        "all": scored[:max_results],
     }
-    candidates = bank.get("loinc-lab-mapper", [("generic hit","generic")])
-    scored=[]
-    for label,key in candidates:
-        score = 0
-        if key in q: score+=10
-        # token overlap
-        qt=set(q.split()); lt=set(label.lower().split())
-        overlap=len(qt & lt)
-        score+=overlap*2
-        scored.append((score,label))
-    scored.sort(reverse=True)
-    top=scored[0] if scored else (0,"no match")
-    return {"query": query, "top_hit": top[1], "score": top[0], "all": scored[:3]}
 
-def process_csv(inp,out):
-    import csv
-    with open(inp, newline="", encoding="utf-8-sig") as f:
-        r=csv.DictReader(f); rows=list(r); fn=r.fieldnames
-        # guess query column
-        qcol = fn[0]
-        for cand in ["query","test","drug","code","variant","hla","lab","name"]:
-            if cand in [c.lower() for c in fn]:
-                qcol = [c for c in fn if c.lower()==cand][0]; break
-        results=[]
-        for row in rows:
-            res=lookup(row.get(qcol,""), row)
-            merged={**row, "top_hit": res["top_hit"], "lookup_score": res["score"]}
-            results.append(merged)
-    with open(out,"w",newline="",encoding="utf-8") as f:
-        w=csv.DictWriter(f, fieldnames=list(fn)+["top_hit","lookup_score"]); w.writeheader(); w.writerows(results)
+
+def _detect_query_column(fieldnames: list) -> str:
+    """Detect the most likely column name containing lab test queries."""
+    if not fieldnames:
+        return ""
+
+    priority_cols = ["query", "test", "lab", "name", "code", "drug", "variant", "hla"]
+
+    for candidate in priority_cols:
+        for col in fieldnames:
+            if col.lower() == candidate:
+                return col
+
+    # Fallback to first column
+    return fieldnames[0]
+
+
+def process_csv(input_path: str, output_path: str) -> list:
+    """Process a CSV file containing lab test queries, mapping each to LOINC codes.
+
+    Args:
+        input_path: Path to input CSV file with a query column.
+        output_path: Path to output CSV file for results.
+
+    Returns:
+        List of result dictionaries with LOINC mapping information.
+
+    Raises:
+        FileNotFoundError: If input file does not exist.
+        ValueError: If input file is empty, has no header, or contains no data rows.
+    """
+    input_file = pathlib.Path(input_path)
+    if not input_file.exists():
+        raise FileNotFoundError(f"Input file not found: {input_path}")
+    if not input_file.is_file():
+        raise ValueError(f"Input path is not a file: {input_path}")
+
+    output_file = pathlib.Path(output_path)
+
+    try:
+        with open(input_file, newline="", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+            fieldnames = reader.fieldnames or []
+    except csv.Error as e:
+        raise ValueError(f"CSV parsing error in {input_path}: {e}")
+
+    if not fieldnames:
+        raise ValueError(f"CSV file {input_path} has no header row")
+    if not rows:
+        raise ValueError(f"CSV file {input_path} contains no data rows")
+
+    qcol = _detect_query_column(fieldnames)
+
+    results = []
+    for row in rows:
+        res = lookup(row.get(qcol, ""))
+        merged = {**row, "top_hit": res["top_hit"], "lookup_score": res["score"]}
+        results.append(merged)
+
+    # Ensure output directory exists
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    output_fieldnames = list(fieldnames) + ["top_hit", "lookup_score"]
+    with open(output_file, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=output_fieldnames)
+        writer.writeheader()
+        writer.writerows(results)
+
     return results
 
-def build_parser():
-    p=argparse.ArgumentParser(prog="loinc_mapper", description="LOINC Lab Mapper")
-    sub=p.add_subparsers(dest="cmd", required=True)
-    s=sub.add_parser("single"); s.add_argument("query", nargs="?", default="creatinine"); s.add_argument("--query", dest="q2")
-    b=sub.add_parser("batch"); b.add_argument("--input", required=True); b.add_argument("--output", required=True)
-    return p
 
-def main(argv=None):
-    p=build_parser(); a=p.parse_args(argv)
-    if a.cmd=="single":
-        q=getattr(a,"q2",None) or getattr(a,"query")
-        print(lookup(q)); return 0
-    if a.cmd=="batch":
-        res=process_csv(a.input, a.output); print(f"Processed {len(res)} -> {a.output}"); return 0
-    p.print_help(); return 1
+def build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser for the CLI."""
+    parser = argparse.ArgumentParser(prog="loinc_mapper", description="LOINC Lab Mapper")
+    subparsers = parser.add_subparsers(dest="cmd", required=True)
 
-if __name__=="__main__":
-    import sys; sys.exit(main())
+    # Single lookup command
+    single = subparsers.add_parser("single", help="Look up a single lab test name")
+    single.add_argument("query", nargs="?", default="", help="Lab test name to look up")
+    single.add_argument("--query", dest="q2", help="Alternative query argument")
+    single.add_argument(
+        "--max-results",
+        type=int,
+        default=5,
+        help="Maximum number of results (default: 5)",
+    )
+
+    # Batch CSV command
+    batch = subparsers.add_parser("batch", help="Batch process a CSV file")
+    batch.add_argument("--input", required=True, help="Input CSV file path")
+    batch.add_argument("--output", required=True, help="Output CSV file path")
+    return parser
+
+
+def main(argv=None) -> int:
+    """Main entry point for the LOINC Lab Mapper CLI."""
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    if args.cmd == "single":
+        q = getattr(args, "q2", None) or getattr(args, "query", "")
+        result = lookup(q)
+        print(json.dumps(result, indent=2))
+        return 0
+
+    if args.cmd == "batch":
+        try:
+            res = process_csv(args.input, args.output)
+            print(json.dumps({"processed": len(res), "output": args.output}, indent=2))
+            return 0
+        except (FileNotFoundError, ValueError) as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+
+    parser.print_help()
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

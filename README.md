@@ -1,7 +1,7 @@
 # LOINC Lab Mapper
 
-> **Domain:** Clinical Decision Support & Biomedical Computing  
-> **Reference Guidelines & Standards:** `Standard Clinical Formulations & ISO/IEC Quality Frameworks`
+> **Domain:** Clinical Decision Support & Biomedical Computing
+> **Reference Guidelines & Standards:** CAP / CLSI / ISO Standards
 
 <div align="center">
 
@@ -16,93 +16,159 @@
 
 ---
 
-## 📖 What It Does
+## What It Does
 
-LOINC Lab Mapper
-Fuzzy maps local lab test names to LOINC codes via token overlap and Levenshtein ratio (no external deps).
-Stdlib parser / mapper with batch CSV and single lookup.
+LOINC Lab Mapper fuzzy maps local lab test names to LOINC codes using token overlap and Levenshtein similarity scoring. No external dependencies required for core mapping functionality.
 
----
-
-## ⚙️ Key Capabilities & Algorithmic Modules
-
-### 🔬 Analytical Functions
-
-- **`lookup()`**: Single lookup: token overlap + substring scoring (no deps). Returns top hits.
-- **`process_csv()`** — calculates and validates process_csv parameters.
-- **`build_parser()`** — calculates and validates build_parser parameters.
-- **`main()`** — calculates and validates main parameters.
+Features:
+- **Single Lookup**: Query individual lab test names and get top LOINC matches
+- **Batch CSV Processing**: Process CSV files with lab test names in bulk
+- **Fuzzy Matching**: Handles typos and variations via Levenshtein distance
+- **REST API**: FastAPI-based web service with OpenAPI documentation
+- **Audit Trail**: HMAC-SHA256 tamper-evident logging
+- **PHI Guard**: Zero-PHI outbound interceptor for HIPAA compliance
 
 ---
 
-## 📐 Mathematical Formulation & Logic
+## Installation
 
-```text
-  score = 0
-```
-
----
-
-## 💻 CLI Quickstart & Usage
-
-### 1. Guided Interactive Mode
+### Local Development
 ```bash
-python cli.py
+# Clone the repository
+git clone https://github.com/abusuraihsakhri/loinc-lab-mapper.git
+cd loinc-lab-mapper
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -e ".[dev]"
 ```
 
-### 2. Direct Parameterized Evaluation
-```bash
-python cli.py --task-id <value> --target <value> --primary <value> --secondary <value>
-```
-
-### Parameter Reference
-- `--task-id`: Specifies input measurement or parameter value.
-- `--target`: Specifies input measurement or parameter value.
-- `--primary`: Specifies input measurement or parameter value.
-- `--secondary`: Specifies input measurement or parameter value.
-- `--critical`: Specifies input measurement or parameter value.
-- `--status`: Specifies input measurement or parameter value.
-- `--input`: Specifies input measurement or parameter value.
-- `--output`: Specifies input measurement or parameter value.
-
-### Input Data Schema
-
-| Field | Description | Requirement |
-|:------|:------------|:------------|
-| `query` | Parameter / observation metric | Required |
-| `lab_name` | Parameter / observation metric | Required |
-
----
-
-## 🛡️ Security & Enterprise Architecture
-
-* **Zero-PHI Outbound Interceptor:** Active AST and regex inspection blocking SSNs, MRNs, phone numbers, and patient identifiers.
-* **Tamper-Evident HMAC-SHA256 Audit Trail:** Chained, cryptographically signed logs for every evaluation and state transition.
-* **Air-Gapped LLM Reasoning Adapter:** Agnostic integration for local Ollama instances (`llama3`, `mistral`), Claude 3.5 Sonnet, GPT-4o, and deterministic test mocks.
-* **Active Learning Bayesian Calibration:** Dynamic tracker updating worker reliability weights and monitoring Brier calibration drift.
-* **FastAPI & Prometheus Telemetry:** Exposes OpenAPI 3.1 REST endpoints and operational Prometheus metrics (`/metrics`).
-
----
-
-## 🧪 Testing & Verification
-
-Run the automated test suite:
-
-```bash
-pytest -v
-```
-
-Execute high-throughput batch simulation benchmarks:
-
-```bash
-python simulator.py --tasks 1000 --concurrency 8
-```
-
----
-
-## 🐳 Container Deployment
-
+### Docker
 ```bash
 docker build -t loinc-lab-mapper .
 docker run -p 8000:8000 loinc-lab-mapper
 ```
+
+---
+
+## Usage
+
+### Core LOINC Mapping
+
+#### Single Lookup
+```bash
+# Look up a lab test by name
+python loinc_mapper.py single creatinine
+
+# With max results
+python loinc_mapper.py single hemoglobin --max-results 3
+```
+
+#### Batch CSV Processing
+```bash
+# Process a CSV file with lab test names
+python loinc_mapper.py batch --input sample.csv --output results.csv
+```
+
+The CSV should have a column named `query`, `test`, `lab`, or `name` (auto-detected). Output includes `top_hit` and `lookup_score` columns.
+
+### Enterprise CLI
+
+#### Audit Task Evaluation
+```bash
+python cli.py audit --task-id TASK-001 --primary 28.5 --secondary 14.2
+```
+
+#### Batch Processing
+```bash
+python cli.py batch -i input.csv -o output.csv
+```
+
+#### Verify Audit Trail
+```bash
+python cli.py verify-audit
+```
+
+#### Launch REST API Server
+```bash
+python cli.py serve --host 127.0.0.1 --port 8000
+```
+
+### REST API Endpoints
+
+| Endpoint | Method | Description |
+|:---------|:-------|:------------|
+| `/health` | GET | Health check |
+| `/metrics` | GET | System metrics |
+| `/api/audit` | POST | Submit task for evaluation |
+| `/api/chat` | POST | Query supervisor chat |
+| `/api/audit/logs` | GET | Get audit trail |
+
+---
+
+## Configuration
+
+| Environment Variable | Description | Default |
+|:---------------------|:------------|:--------|
+| `AUDIT_SECRET_KEY` | HMAC-SHA256 key for audit trail | Development-only (set in production!) |
+| `MODEL_PROVIDER` | LLM provider (`mock`, `ollama`, `claude`, `openai`) | `mock` |
+
+---
+
+## Testing
+
+```bash
+# Run all tests
+pytest -v
+
+# Run with coverage
+pytest -v --cov=loinc_mapper --cov=agents
+
+# Run specific test file
+pytest tests/test_loinc_mapper_core.py -v
+```
+
+---
+
+## Project Structure
+
+```
+loinc-lab-mapper/
+├── loinc_mapper.py      # Core LOINC mapping engine
+├── cli.py               # Enterprise CLI interface
+├── enrichment.py        # Feature enrichment engines
+├── simulator.py         # High-throughput simulation
+├── agents/              # Enterprise agent framework
+│   ├── base.py          # Security, PHI guard, audit trail
+│   ├── models.py        # Pydantic data models
+│   ├── supervisor.py    # Multi-agent orchestrator
+│   ├── workers.py       # Specialized evaluation workers
+│   ├── api.py           # FastAPI REST endpoints
+│   ├── metrics.py       # Prometheus metrics
+│   ├── learning.py      # Bayesian calibration engine
+│   ├── llm_factory.py   # LLM provider factory
+│   └── streamer.py      # WebSocket telemetry
+├── tests/               # Test suite
+├── web/                 # Operations console (HTML)
+├── Dockerfile           # Container build
+├── docker-compose.yml   # Container orchestration
+└── pyproject.toml       # Python packaging
+```
+
+---
+
+## Security
+
+- **Zero-PHI Outbound Interceptor**: AST and regex inspection blocking SSNs, MRNs, phone numbers, and patient identifiers
+- **Tamper-Evident HMAC-SHA256 Audit Trail**: Chained, cryptographically signed logs
+- **Input Validation**: All inputs validated and sanitized
+- **No Hardcoded Secrets**: Production secrets via environment variables
+
+---
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.

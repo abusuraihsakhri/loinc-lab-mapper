@@ -38,6 +38,7 @@ loinc-mapper = "cli:main"
 
 [tool.setuptools]
 packages = ["agents"]
+py-modules = ["loinc_mapper", "cli", "enrichment", "simulator"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "."]

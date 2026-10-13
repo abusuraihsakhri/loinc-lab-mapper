@@ -1,5 +1,5 @@
 """
-Inference Engine supporting local Ollama, Claude, OpenAI, and deterministic Mock with Zero-PHI checks.
+Deterministic mock response provider with a limited identifier-pattern guard.
 """
 from typing import Dict, Any, Optional
 from .base import PHIGuard
@@ -15,7 +15,7 @@ class MockLLM:
 
 
 class LLMFactory:
-    """Creates configured LLM client instances with zero-PHI protection."""
+    """Return the mock provider; networked model integrations are not implemented."""
 
     @staticmethod
     def create(provider: str = "mock", system_name: str = "Loinc Lab Mapper"):

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Loinc Lab Mapper API",
-    "description": "Enterprise Distributed Component Platform (Clinical & Cryptographic AI) adhering to CAP / CLSI / NIST Standards.",
+    "description": "Local demonstration audit API. Thresholds are unvalidated and not clinical reference values.",
     "version": "3.0.0-ENTERPRISE",
     "contact": {
       "name": "Dr. Abu Suraih Sakhri",
@@ -12,7 +12,7 @@
   "paths": {
     "/health": {
       "get": {
-        "summary": "Health and metadata check",
+        "summary": "Local service health check",
         "responses": {
           "200": {
             "description": "System optimal"
@@ -22,7 +22,7 @@
     },
     "/metrics": {
       "get": {
-        "summary": "Prometheus operational metrics",
+        "summary": "Local in-memory JSON counters",
         "responses": {
           "200": {
             "description": "Prometheus text metrics"
@@ -32,7 +32,7 @@
     },
     "/api/audit": {
       "post": {
-        "summary": "Dispatch task payload across specialized workers",
+        "summary": "Evaluate a synthetic task using demonstration thresholds",
         "requestBody": {
           "content": {
             "application/json": {
@@ -76,7 +76,7 @@
     },
     "/api/chat": {
       "post": {
-        "summary": "Air-gapped supervisory conversational assistant",
+        "summary": "Return a deterministic mock response",
         "requestBody": {
           "content": {
             "application/json": {
@@ -103,10 +103,20 @@
     },
     "/api/audit/logs": {
       "get": {
-        "summary": "Retrieve and cryptographically verify HMAC audit trail",
+        "summary": "Inspect retained in-memory HMAC audit entries",
         "responses": {
           "200": {
             "description": "Cryptographic audit trail"
+          }
+        }
+      }
+    },
+    "/console": {
+      "get": {
+        "summary": "Open local demonstration console",
+        "responses": {
+          "200": {
+            "description": "HTML operations console"
           }
         }
       }

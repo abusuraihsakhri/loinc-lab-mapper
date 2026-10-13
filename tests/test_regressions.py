@@ -21,6 +21,7 @@ from loinc_mapper import lookup, process_csv
         ("free t3", "3051-0"),
         ("t3", "3053-6"),
         ("pco2", "11557-6"),
+        ("bun", "3094-0"),
         ("bicarbonate", "1963-8"),
     ],
 )

@@ -24,7 +24,11 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install fastapi uvicorn pydantic pytest
+        python -m pip install -e ".[dev]"
+        python -m pip check
+
+    - name: Compile Python sources
+      run: python -m compileall -q agents loinc_mapper.py cli.py enrichment.py simulator.py
 
     - name: Run Pytest Suite
       run: |

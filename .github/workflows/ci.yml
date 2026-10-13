@@ -1,4 +1,4 @@
-name: Loinc Lab Mapper CI/CD & Security Verification
+name: LOINC Lab Mapper CI
 
 on:
   push:
@@ -50,11 +50,11 @@ jobs:
       run: |
         pytest -v
 
-    - name: Security SAST & Zero-PHI Audit
+    - name: Audit chain sanity check
       run: |
         python -c "
         from agents.base import PHIGuard, AuditLogger
         import pytest
         assert AuditLogger.verify_integrity() is True
-        print('Security & Zero-PHI Audit Passed!')
+        print('Audit-chain check passed')
         "

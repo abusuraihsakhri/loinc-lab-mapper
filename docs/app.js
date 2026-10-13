@@ -88,7 +88,7 @@ lookupForm.addEventListener("submit", async (event) => {
     pyodide.globals.set("user_query", query);
     pyodide.globals.set("result_limit", count);
     const output = await pyodide.runPythonAsync(
-      "json.dumps(loinc_mapper.lookup(user_query, max_results=result_limit))"
+      "json.dumps(loinc_mapper.lookup(user_query, max_results=int(result_limit)))"
     );
     renderResults(JSON.parse(output));
     setStatus("Lookup complete · check candidate code and specimen details before use");

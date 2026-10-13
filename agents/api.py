@@ -14,7 +14,7 @@ supervisor = SystemSupervisor(model_provider="mock")
 
 app = FastAPI(
     title="Loinc Lab Mapper API",
-    description="Enterprise Distributed Component Platform (Clinical & Biomedical AI)",
+    description="Local demonstration API; evaluation thresholds are not validated clinical guidance",
     version="3.0.0-ENTERPRISE",
 )
 
@@ -30,7 +30,7 @@ def operations_console():
 
 @app.get("/health")
 def health():
-    return {"status": "HEALTHY", "service": "loinc-lab-mapper", "domain": "Clinical & Biomedical AI", "standard": "CAP / CLSI / ISO Standards", "version": "3.0.0-ENTERPRISE"}
+    return {"status": "HEALTHY", "service": "loinc-lab-mapper", "domain": "Clinical & Biomedical AI", "standard": "Demonstration thresholds only", "version": "3.0.0-ENTERPRISE"}
 
 
 @app.get("/metrics")

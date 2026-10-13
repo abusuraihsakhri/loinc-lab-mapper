@@ -62,8 +62,8 @@ class AuditTrail:
         if not resolved_key:
             import warnings
             warnings.warn(
-                "AUDIT_SECRET_KEY not set. Using a development-only default. "
-                "Set AUDIT_SECRET_KEY environment variable in production.",
+                "AUDIT_SECRET_KEY not set. Generating an ephemeral process-local signing key. "
+                "Set AUDIT_SECRET_KEY for persistent configuration.",
                 stacklevel=2,
             )
             resolved_key = secrets.token_urlsafe(32)

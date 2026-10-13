@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Browser-based lookup of a small curated set of laboratory LOINC codes.">
+  <title>LOINC Lab Mapper</title>
+  <style>
+    :root { color-scheme: light; --bg:#f4f6fa; --paper:#fff; --text:#142034; --muted:#516079; --accent:#1556af; --line:#d7deea; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(960px,calc(100% - 2rem)); margin:3rem auto; }
+    .eyebrow { color:var(--accent); font-size:.8rem; font-weight:750; text-transform:uppercase; letter-spacing:.08em; }
+    h1 { margin:.2rem 0; font-size:clamp(2rem,5vw,3rem); letter-spacing:-.035em; }
+    h2 { font-size:1.25rem; margin:0 0 1rem; }
+    h3 { font-size:1.05rem; margin:0 0 .5rem; }
+    .lede { max-width:750px; color:var(--muted); margin:0 0 1.8rem; }
+    .layout { display:grid; grid-template-columns:1fr 1fr; gap:1rem; align-items:start; }
+    .card { padding:1.5rem; background:var(--paper); border:1px solid var(--line); border-radius:14px; box-shadow:0 4px 20px rgba(15,40,70,.035); }
+    .wide { grid-column:1/-1; }
+    label { display:block; font-weight:650; margin:.8rem 0 .35rem; }
+    input { width:100%; border:1px solid #a9b5c7; border-radius:8px; padding:.75rem; font:inherit; }
+    input:focus-visible,button:focus-visible { outline:3px solid #7faef3; outline-offset:2px; }
+    button { background:var(--accent); color:white; border:0; border-radius:8px; padding:.78rem 1.1rem; font:inherit; font-weight:700; cursor:pointer; margin-top:1rem; }
+    button:hover { background:#0c3b82; }
+    button:disabled { opacity:.55; cursor:wait; }
+    .muted, small { color:var(--muted); }
+    small { display:block; margin:.4rem 0 .6rem; }
+    .status { margin:1rem 0; padding:1rem; border-left:4px solid var(--accent); background:#e8eef8; border-radius:5px; }
+    table { border-collapse:collapse; width:100%; margin-top:1rem; font-size:.94rem; }
+    th,td { text-align:left; padding:.7rem .6rem; border-bottom:1px solid var(--line); }
+    th { background:#eef3f9; }
+    footer { margin:1.6rem 0 3rem; font-size:.85rem; color:var(--muted); }
+    footer a { color:var(--accent); }
+    @media(max-width:720px) { .layout { grid-template-columns:1fr; } main { margin:1.4rem auto; } .card { padding:1.1rem; } }
+  </style>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js" defer></script>
+  <script src="./app.js" defer></script>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Laboratory terminology utility</div>
+  <h1>LOINC Lab Mapper</h1>
+  <p class="lede">Search a small, bundled reference list of laboratory observations, or map a CSV of local names. The mapping engine runs in Python inside your browser using Pyodide—without a server processing the queries.</p>
+  <div class="layout">
+    <section class="card">
+      <h2>Single lookup</h2>
+      <form id="lookup-form">
+        <label for="query">Laboratory test or code</label>
+        <input id="query" type="text" value="creatinine" maxlength="256" required autocomplete="off">
+        <label for="max-results">Maximum candidates</label>
+        <input id="max-results" type="number" value="5" min="1" max="20" step="1" required>
+        <button id="lookup-button" type="submit">Find candidates</button>
+      </form>
+    </section>
+    <section class="card">
+      <h2>Batch CSV mapping</h2>
+      <form id="batch-form">
+        <label for="csv-file">Select CSV</label>
+        <input id="csv-file" type="file" accept=".csv,text/csv" required>
+        <small>Up to 1 MiB. Use a column called <code>query</code>, <code>test</code>, <code>lab</code>, or <code>name</code>. Produces a CSV with <code>top_hit</code> and <code>lookup_score</code>.</small>
+        <button id="batch-button" type="submit">Map and download CSV</button>
+      </form>
+    </section>
+    <div class="wide status" id="status" role="status" aria-live="polite">Ready. The Python runtime will load on first use.</div>
+    <section class="card wide" id="results" aria-label="Lookup results">
+      <h2>Results</h2>
+      <p class="muted">Enter a test name to see ranked candidate codes.</p>
+    </section>
+  </div>
+  <footer>
+    <p><strong>For terminology review, not direct clinical coding.</strong> Codes may distinguish specimen, method, units, and property; confirm these against the current official LOINC catalog before use. The bundled list is not exhaustive.</p>
+    <p>Processing is local after the Pyodide runtime and mapper source load. The runtime downloads from jsDelivr. Do not upload patient-identifiable records. No query or CSV data is deliberately transmitted by this application.</p>
+    <p><a href="https://github.com/abusuraihsakhri/loinc-lab-mapper">Source code and instructions</a></p>
+  </footer>
+</main>
+</body>
+</html>

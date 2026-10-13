@@ -3,8 +3,10 @@ FastAPI REST API Server for Loinc Lab Mapper.
 """
 from typing import Dict, Any, List
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from pathlib import Path
 from pydantic import BaseModel
-from .base import AuditLogger, PHIGuard
+from .base import AuditLogger, PHIGuard, SecurityException
 from .models import SystemTaskPayload, ConsensusDossier
 from .supervisor import SystemSupervisor
 
@@ -19,6 +21,11 @@ app = FastAPI(
 
 class ChatRequest(BaseModel):
     query: str
+
+
+@app.get("/console", include_in_schema=False)
+def operations_console():
+    return FileResponse(Path(__file__).resolve().parent.parent / "web" / "index.html")
 
 
 @app.get("/health")
@@ -37,8 +44,11 @@ def metrics():
 
 @app.post("/api/audit")
 def api_audit(payload: SystemTaskPayload):
-    dossier = supervisor.process_task(payload)
-    return dossier.to_dict()
+    try:
+        dossier = supervisor.process_task(payload)
+        return dossier.to_dict()
+    except SecurityException:
+        raise HTTPException(status_code=422, detail="Input contains a prohibited identifier")
 
 
 @app.post("/api/chat")
@@ -46,8 +56,8 @@ def api_chat(req: ChatRequest):
     try:
         ans = supervisor.query_supervisory_chat(req.query)
         return {"response": ans}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except SecurityException:
+        raise HTTPException(status_code=422, detail="Input contains a prohibited identifier")
 
 
 @app.get("/api/audit/logs")

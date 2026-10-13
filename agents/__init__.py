@@ -1,7 +1,7 @@
 """
-Loinc Lab Mapper — Enterprise Automated Analytical Suite.
+Loinc Lab Mapper — Demonstration audit and laboratory mapping utilities.
 Domain: Clinical & Biomedical AI
-Standard: CAP / CLSI / ISO Standards
+Thresholds are unvalidated and not clinical standards
 
 """
 __version__ = "3.0.0-ENTERPRISE"

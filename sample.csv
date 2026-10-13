@@ -1,4 +1,4 @@
-query,lab_name
-Q1,creatinine serum
-Q2,HbA1c blood
-Q3,WBC count
+query,local_id
+creatinine,Q1
+HbA1c,Q2
+WBC,Q3

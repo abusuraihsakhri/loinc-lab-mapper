@@ -1,4 +1,4 @@
-name: Loinc Lab Mapper CI/CD & Security Verification
+name: LOINC Lab Mapper CI
 
 on:
   push:
@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ master, main ]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   test-and-audit:
     runs-on: ubuntu-latest
@@ -24,17 +27,37 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install fastapi uvicorn pydantic pytest
+        python -m pip install -e ".[dev]"
+        python -m pip check
+
+    - name: Compile Python sources
+      run: python -m compileall -q agents loinc_mapper.py cli.py enrichment.py simulator.py
+
+    - name: Check JavaScript syntax
+      run: |
+        node --check docs/app.js
+        python - <<'PY'
+        from pathlib import Path
+        html = Path("web/index.html").read_text(encoding="utf-8")
+        script = html.split("<script>")[1].split("</script>")[0]
+        Path("/tmp/loinc_console.js").write_text(script, encoding="utf-8")
+        PY
+        node --check /tmp/loinc_console.js
+
+    - name: Smoke test entry points
+      run: |
+        loinc-lookup single creatinine
+        loinc-mapper verify-audit
 
     - name: Run Pytest Suite
       run: |
         pytest -v
 
-    - name: Security SAST & Zero-PHI Audit
+    - name: Audit chain sanity check
       run: |
         python -c "
         from agents.base import PHIGuard, AuditLogger
         import pytest
         assert AuditLogger.verify_integrity() is True
-        print('Security & Zero-PHI Audit Passed!')
+        print('Audit-chain check passed')
         "

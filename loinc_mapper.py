@@ -27,21 +27,23 @@ LOINC_DATABASE = [
     ("2093-3", "Cholesterol", ["cholesterol", "chol", "tc"]),
     ("2085-9", "HDL Cholesterol", ["hdl", "hdl cholesterol", "high density lipoprotein"]),
     ("2089-1", "LDL Cholesterol", ["ldl", "ldl cholesterol", "low density lipoprotein"]),
-    ("30522-7", "CRP", ["crp", "c-reactive protein", "c reactive protein"]),
-    ("1988-5", "ESR", ["esr", "sed rate", "erythrocyte sedimentation rate"]),
+    ("1988-5", "CRP", ["crp", "c-reactive protein", "c reactive protein"]),
+    ("30522-7", "hs-CRP", ["hs-crp", "hscrp", "high sensitivity crp", "high sensitivity c-reactive protein"]),
+    ("4537-7", "ESR (Westergren)", ["esr", "sed rate", "erythrocyte sedimentation rate", "westergren"]),
     ("1751-7", "Albumin", ["albumin", "alb"]),
     ("1975-2", "Bilirubin", ["bilirubin", "bili", "total bilirubin"]),
     ("1742-6", "ALT", ["alt", "alanine aminotransferase", "sgpt"]),
     ("1920-8", "AST", ["ast", "aspartate aminotransferase", "sgot"]),
     ("2885-2", "Total Protein", ["total protein", "tp", "protein total"]),
-    ("2161-8", "Urea Nitrogen", ["bun", "blood urea nitrogen", "urea nitrogen"]),
-    ("13945-1", "TSH", ["tsh", "thyroid stimulating hormone", "thyrotropin"]),
-    ("3016-3", "T4", ["t4", "thyroxine", "free t4", "ft4"]),
-    ("3024-7", "T3", ["t3", "triiodothyronine", "free t3", "ft3"]),
+    ("3094-0", "Urea Nitrogen", ["bun", "blood urea nitrogen", "urea nitrogen"]),
+    ("3016-3", "TSH", ["tsh", "thyroid stimulating hormone", "thyrotropin"]),
+    ("3024-7", "Free T4", ["free t4", "ft4", "free thyroxine"]),
+    ("3053-6", "Total T3", ["t3", "total t3", "triiodothyronine"]),
+    ("3051-0", "Free T3", ["free t3", "ft3", "free triiodothyronine"]),
     ("11558-4", "pH", ["ph", "blood ph"]),
-    ("11555-0", "pCO2", ["pco2", "carbon dioxide", "co2"]),
+    ("11557-6", "pCO2", ["pco2", "carbon dioxide partial pressure"]),
     ("11556-8", "pO2", ["po2", "oxygen", "o2"]),
-    ("11557-6", "HCO3", ["hco3", "bicarbonate"]),
+    ("1963-8", "Bicarbonate", ["hco3", "bicarbonate", "serum bicarbonate"]),
 ]
 
 
@@ -96,9 +98,14 @@ def lookup(query: str, max_results: int = 5) -> dict:
         query = ""
     query = str(query).lower().strip()
 
+    if not isinstance(max_results, int) or max_results < 1:
+        raise ValueError("max_results must be a positive integer")
+    if len(query) > 256:
+        raise ValueError("query must be 256 characters or fewer")
     if not query:
         return {"query": query, "top_hit": "no match", "score": 0, "all": []}
 
+    query_tokens = set(query.split())
     scored = []
     for loinc_code, display_name, keywords in LOINC_DATABASE:
         max_keyword_score = 0
@@ -113,30 +120,29 @@ def lookup(query: str, max_results: int = 5) -> dict:
                 break
 
             # Keyword substring match (keyword contained in query)
-            if kw in query:
+            if len(kw) >= 3 and kw in query:
                 max_keyword_score = max(max_keyword_score, 6.0)
 
             # Query substring of keyword (query contained in keyword)
-            if query in kw:
+            if len(query) >= 3 and query in kw:
                 max_keyword_score = max(max_keyword_score, 4.0)
 
             # Token overlap scoring
-            query_tokens = set(query.split())
             keyword_tokens = set(kw.split())
             overlap = len(query_tokens & keyword_tokens)
-            if overlap > 0:
+            if overlap > 0 and (len(query) >= 3 or query == kw):
                 max_keyword_score = max(max_keyword_score, overlap * 2.0)
 
             # Levenshtein similarity for fuzzy matching (threshold 0.7)
             ratio = _levenshtein_ratio(query, kw)
-            if ratio >= 0.7:
+            if len(query) >= 3 and len(kw) >= 3 and ratio >= 0.7:
                 max_keyword_score = max(max_keyword_score, ratio * 5.0)
 
         # Also check display name for matches
         name_lower = display_name.lower()
-        if query in name_lower:
+        if len(query) >= 3 and query in name_lower:
             max_keyword_score = max(max_keyword_score, 5.0)
-        elif name_lower in query:
+        elif len(name_lower) >= 3 and name_lower in query:
             max_keyword_score = max(max_keyword_score, 3.0)
 
         # LOINC code exact match bonus
@@ -165,7 +171,7 @@ def _detect_query_column(fieldnames: list) -> str:
     if not fieldnames:
         return ""
 
-    priority_cols = ["query", "test", "lab", "name", "code", "drug", "variant", "hla"]
+    priority_cols = ["query", "test", "lab", "name", "code"]
 
     for candidate in priority_cols:
         for col in fieldnames:
@@ -203,7 +209,7 @@ def process_csv(input_path: str, output_path: str) -> list:
             reader = csv.DictReader(f)
             rows = list(reader)
             fieldnames = reader.fieldnames or []
-    except csv.Error as e:
+    except (csv.Error, UnicodeError) as e:
         raise ValueError(f"CSV parsing error in {input_path}: {e}")
 
     if not fieldnames:
@@ -215,6 +221,8 @@ def process_csv(input_path: str, output_path: str) -> list:
 
     results = []
     for row in rows:
+        if None in row:
+            raise ValueError("CSV contains a row with more fields than its header")
         res = lookup(row.get(qcol, ""))
         merged = {**row, "top_hit": res["top_hit"], "lookup_score": res["score"]}
         results.append(merged)
@@ -222,11 +230,17 @@ def process_csv(input_path: str, output_path: str) -> list:
     # Ensure output directory exists
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
-    output_fieldnames = list(fieldnames) + ["top_hit", "lookup_score"]
+    output_fieldnames = list(dict.fromkeys([*fieldnames, "top_hit", "lookup_score"]))
     with open(output_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=output_fieldnames)
         writer.writeheader()
-        writer.writerows(results)
+        # Prevent spreadsheet formula execution when the exported CSV is opened in Excel.
+        safe_rows = [
+            {k: ("'" + v if isinstance(v, str) and v.lstrip().startswith(("=", "+", "-", "@", "\t", "\r")) else v)
+             for k, v in row.items()}
+            for row in results
+        ]
+        writer.writerows(safe_rows)
 
     return results
 
@@ -261,7 +275,11 @@ def main(argv=None) -> int:
 
     if args.cmd == "single":
         q = getattr(args, "q2", None) or getattr(args, "query", "")
-        result = lookup(q)
+        try:
+            result = lookup(q, max_results=args.max_results)
+        except ValueError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
         print(json.dumps(result, indent=2))
         return 0
 

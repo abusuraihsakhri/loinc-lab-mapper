@@ -58,7 +58,7 @@ def main(argv=None):
         dossier = supervisor.process_task(payload)
         print("=" * 80)
         print(f"  LOINC LAB MAPPER")
-        print(f"  Domain: Clinical & Biomedical AI | Standard: CAP / CLSI / ISO Standards")
+        print("  Demonstration-only thresholds; not clinical decision support")
         print(f"  Dossier ID: {dossier.dossier_id} | Urgency: [{dossier.overall_urgency.value}]")
         print("=" * 80)
         for a in dossier.alerts:
@@ -106,14 +106,14 @@ def main(argv=None):
             print("Error: CSV file contains no data rows", file=sys.stderr)
             return 1
 
-        out_fields = fieldnames + ["overall_urgency", "integrity_status", "total_alerts", "audit_hash"]
+        out_fields = list(dict.fromkeys([*fieldnames, "overall_urgency", "integrity_status", "total_alerts", "audit_hash"]))
         out_rows = []
-        for r in rows:
+        for row_number, r in enumerate(rows, start=2):
             try:
                 primary = float(r.get("primary_metric", 15.0))
                 secondary = float(r.get("secondary_metric", 5.0))
             except (ValueError, TypeError) as e:
-                print(f"Warning: Invalid metric values in row {r}: {e}", file=sys.stderr)
+                print(f"Warning: Invalid metric values at CSV row {row_number}; row skipped", file=sys.stderr)
                 continue
 
             payload = SystemTaskPayload(

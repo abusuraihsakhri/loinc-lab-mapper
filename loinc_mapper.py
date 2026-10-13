@@ -35,7 +35,7 @@ LOINC_DATABASE = [
     ("1742-6", "ALT", ["alt", "alanine aminotransferase", "sgpt"]),
     ("1920-8", "AST", ["ast", "aspartate aminotransferase", "sgot"]),
     ("2885-2", "Total Protein", ["total protein", "tp", "protein total"]),
-    ("2161-8", "Urea Nitrogen", ["bun", "blood urea nitrogen", "urea nitrogen"]),
+    ("3094-0", "Urea Nitrogen", ["bun", "blood urea nitrogen", "urea nitrogen"]),
     ("3016-3", "TSH", ["tsh", "thyroid stimulating hormone", "thyrotropin"]),
     ("3024-7", "Free T4", ["free t4", "ft4", "free thyroxine"]),
     ("3053-6", "Total T3", ["t3", "total t3", "triiodothyronine"]),

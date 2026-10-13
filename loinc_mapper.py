@@ -171,7 +171,7 @@ def _detect_query_column(fieldnames: list) -> str:
     if not fieldnames:
         return ""
 
-    priority_cols = ["query", "test", "lab", "name", "code", "drug", "variant", "hla"]
+    priority_cols = ["query", "test", "lab", "name", "code"]
 
     for candidate in priority_cols:
         for col in fieldnames:
@@ -209,7 +209,7 @@ def process_csv(input_path: str, output_path: str) -> list:
             reader = csv.DictReader(f)
             rows = list(reader)
             fieldnames = reader.fieldnames or []
-    except csv.Error as e:
+    except (csv.Error, UnicodeError) as e:
         raise ValueError(f"CSV parsing error in {input_path}: {e}")
 
     if not fieldnames:

@@ -35,6 +35,7 @@ dev = [
 
 [project.scripts]
 loinc-mapper = "cli:main"
+loinc-lookup = "loinc_mapper:main"
 
 [tool.setuptools]
 packages = ["agents"]

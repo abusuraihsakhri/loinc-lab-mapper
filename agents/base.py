@@ -11,7 +11,6 @@ import hashlib
 import secrets
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
-from pydantic import BaseModel, Field
 
 PHI_PATTERNS = [
     re.compile(r"\b(?:MRN|mrn)[:#\s-]*\d{4,10}\b", re.IGNORECASE),
@@ -25,7 +24,7 @@ PHI_PATTERNS = [
 
 
 class SecurityException(Exception):
-    """Raised when outbound data violates HIPAA Safe Harbor or contains raw PHI."""
+    """Raised when a known identifier pattern is detected."""
     pass
 
 
@@ -92,7 +91,7 @@ class AuditTrail:
             "current_hash": signature,
         }
         self.logs.append(entry)
-        return entry
+        return entry.copy()
 
     def verify_integrity(self) -> bool:
         prev = "GENESIS_BLOCK_0000000000000000"

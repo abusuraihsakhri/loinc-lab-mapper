@@ -30,6 +30,22 @@ jobs:
     - name: Compile Python sources
       run: python -m compileall -q agents loinc_mapper.py cli.py enrichment.py simulator.py
 
+    - name: Check JavaScript syntax
+      run: |
+        node --check docs/app.js
+        python - <<'PY'
+        from pathlib import Path
+        html = Path("web/index.html").read_text(encoding="utf-8")
+        script = html.split("<script>")[1].split("</script>")[0]
+        Path("/tmp/loinc_console.js").write_text(script, encoding="utf-8")
+        PY
+        node --check /tmp/loinc_console.js
+
+    - name: Smoke test entry points
+      run: |
+        loinc-lookup single creatinine
+        loinc-mapper verify-audit
+
     - name: Run Pytest Suite
       run: |
         pytest -v
